@@ -1,5 +1,18 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
+
+# The above class represents a movie with attributes such as id, title, overview, year, rating, and
+# category.
+class Movie(BaseModel):
+    id: int
+    title : str
+    overview : str
+    year: int
+    rating: float
+    category : str
+
+
 app = FastAPI()
 app.title = "FastApi app"
 app.version = "0.0.1"
@@ -57,3 +70,8 @@ def get_movie_by_id(id: int):
 @app.get('/movies/', tags=['movies'])
 def get_movies_by_category(category: str):
     return [item for item in movies if item["category"].lower() == category.lower()]
+
+@app.post("/movies", tags=["movies"])
+def create_movie(request: Request, moviedto: Movie):
+    movies.append(dict(moviedto))
+    return movies
