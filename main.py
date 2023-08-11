@@ -1,9 +1,25 @@
-from fastapi import FastAPI, Path, Query
-from fastapi.responses import HTMLResponse
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
+
+from starlette.requests import Request
+from jwt_manager import create_token, validate_token
+from fastapi.security import HTTPBearer
 
 # Schemas
+class JWTBearer(HTTPBearer):
+    async def __call__(self, request: Request):
+        auth = await super().__call__(request)
+        data = validate_token(auth.credentials)
+        if data['email'] != "admin@gmail.com":
+            raise HTTPException(status_code=403, detail="Invalid credentials")
+        
+
+class User(BaseModel):
+    email: str
+    password:str
+
 class Movie(BaseModel):
     id: Optional[int] = None
     title : str = Field(default='Mi pelicula' ,min_length=5, max_length=15)
@@ -56,39 +72,52 @@ movies = [
     },
 ]
 
+@app.post('/login',tags=["auth"])
+def login(user: User):
+    if user.email == "admin@gmail.com" and user.password == "admin":
+        jwt: str = create_token(dict(user))
+        return JSONResponse(status_code=200, content=jwt)
+    else:
+        return JSONResponse(status_code=404, content={"error": "Not valid user"})
 
-@app.get('/', tags=['home'])
-def message():
-    return {"hello": "world",}
+@app.get('/', tags=['home'], response_model=dict, status_code=200)
+def message()-> dict:
+    dictionary = {"hello": "world",}
+    return JSONResponse(status_code=200, content=dictionary)
 
 @app.get('/html', tags=['home'])
 def message_html():
     return HTMLResponse('<h1>Hello World</h1>')
 
-@app.get('/movies', tags=['movies'])
-def get_movies():
-    return movies
+@app.get('/movies', tags=['movies'], response_model=List[Movie], dependencies=[Depends(JWTBearer())])
+def get_movies() -> List[Movie]:
+    return JSONResponse(content=movies)
 
 #  Path parameters
-@app.get('/movies/{id}', tags=['movies'])
-def get_movie_by_id(id: int = Path(ge=1, le= 100)):
-    for item in movies:
-        if item["id"] == id:
-            return item
+@app.get('/movies/{id}', tags=['movies'], response_model=Movie)
+def get_movie_by_id(id: int = Path(ge=1, le= 100)) -> Movie:
+    movie_index = None
+    for idx, movie in enumerate(movies):
+        if movie['id'] == id:
+            movie_index = idx
+            break
     
-    return {"error": "Movie not found"}
+    if movie_index is not None:
+        return JSONResponse(movies[movie_index])
+    else:
+        return JSONResponse({"error": "Movie not found"})
 
 # Query parameters
 @app.get('/movies/', tags=['movies'])
 def get_movies_by_category(category: str = Query(min_length=5, max_length=15)):
-    return [item for item in movies if item["category"].lower() == category.lower()]
+    return [JSONResponse(content=item) for item in movies if item["category"].lower() == category.lower()]
 
-@app.post("/movies", tags=["movies"])
+@app.post("/movies", tags=["movies"], status_code=201)
 def create_movie(moviedto: Movie):
     movies.append(dict(moviedto))
-    return movies
+    return JSONResponse(status_code=201, content=movies)
 
-@app.put('/movies/{movie_id}', tags=["movies"])
+@app.put('/movies/{movie_id}', tags=["movies"], status_code=200)
 def update_movie(movie_id: int, moviedto: Movie):
     movie_index = None
     for idx, movie in enumerate(movies):
@@ -107,7 +136,7 @@ def update_movie(movie_id: int, moviedto: Movie):
         return {"error": "Movie not found"}
 
 
-@app.delete('/movies/{movie_id}', tags=["movies"])
+@app.delete('/movies/{movie_id}', tags=["movies"], status_code=200)
 def delete_movie(movie_id: int):
     movie_index = None
     for idx, movie in enumerate(movies):
@@ -120,4 +149,6 @@ def delete_movie(movie_id: int):
         return {"message": f"Movie with ID {movie_id} deleted", "deleted_movie": deleted_movie}
     else:
         return {"error": "Movie not found"}
+
+
 
