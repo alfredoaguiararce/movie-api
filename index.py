@@ -4,8 +4,15 @@ from pydantic import BaseModel
 
 # The above class represents a movie with attributes such as id, title, overview, year, rating, and
 # category.
-class Movie(BaseModel):
+class MovieCreateDto(BaseModel):
     id: int
+    title : str
+    overview : str
+    year: int
+    rating: float
+    category : str
+
+class MovieUpdateDto(BaseModel):
     title : str
     overview : str
     year: int
@@ -72,6 +79,39 @@ def get_movies_by_category(category: str):
     return [item for item in movies if item["category"].lower() == category.lower()]
 
 @app.post("/movies", tags=["movies"])
-def create_movie(request: Request, moviedto: Movie):
+def create_movie(request: Request, moviedto: MovieCreateDto):
     movies.append(dict(moviedto))
     return movies
+
+@app.put('/movies/{movie_id}', tags=["movies"])
+def update_movie(movie_id: int, request: Request, moviedto: MovieUpdateDto):
+    movie_index = None
+    for idx, movie in enumerate(movies):
+        if movie['id'] == movie_id:
+            movie_index = idx
+            break
+    
+    if movie_index is not None:
+        movies[movie_index]['title'] = moviedto.title
+        movies[movie_index]['overview'] = moviedto.overview
+        movies[movie_index]['year'] = moviedto.year
+        movies[movie_index]['rating'] = moviedto.rating
+        movies[movie_index]['category'] = moviedto.category
+        return movies[movie_index]
+    else:
+        return {"error": "Movie not found"}
+
+
+@app.delete('/movies/{movie_id}', tags=["movies"])
+def delete_movie(movie_id: int):
+    movie_index = None
+    for idx, movie in enumerate(movies):
+        if movie['id'] == movie_id:
+            movie_index = idx
+            break
+    
+    if movie_index is not None:
+        deleted_movie = movies.pop(movie_index)
+        return {"message": f"Movie with ID {movie_id} deleted", "deleted_movie": deleted_movie}
+    else:
+        return {"error": "Movie not found"}
